@@ -26,4 +26,4 @@ The process is as follows:
 5. Test the inference using the jupyter notebook (serial library). 
 
 
-![alt text]([https://github.com/rkarn/Locking-DT-RF/blob/main/decision_tree_diagram-1.png](https://github.com/rkarn/Encrypted-Decision-Tree-Sequential/tree/main/DecisionTree_Comb_ENC_GPIO_UART/OPE)https://github.com/rkarn/Encrypted-Decision-Tree-Sequential/tree/main/DecisionTree_Comb_ENC_GPIO_UART/OPE/setup.jpg)
+![alt text](https://github.com/rkarn/Encrypted-Decision-Tree-Sequential/blob/main/DecisionTree_Comb_ENC_GPIO_UART/OPE/Setup.jpg)
