@@ -1,0 +1,1 @@
+Warning (10268): Verilog HDL information at de10_standard.v(830): always construct contains both blocking and non-blocking assignments File: C:/Quartus_Projects/DecisionTree_Seq_Unenc_GPIO_UART/Quartus with label display on 7seg/de10_standard.v Line: 830

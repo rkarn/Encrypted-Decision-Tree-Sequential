@@ -1,0 +1,159 @@
+import idx2numpy
+import seaborn as sns
+
+X_train_3D = idx2numpy.convert_from_file('train-images.idx3-ubyte')
+X_train = X_train_3D.flatten().reshape(60000,784)
+
+y_train = idx2numpy.convert_from_file('train-labels.idx1-ubyte')
+X_train.shape, y_train.shape
+
+X_test_3D = idx2numpy.convert_from_file('t10k-images.idx3-ubyte')
+X_test =  X_test_3D.flatten().reshape(10000,784)
+
+y_test = idx2numpy.convert_from_file('t10k-labels.idx1-ubyte')
+X_test.shape, y_test.shape
+
+import numpy as np
+from sklearn.utils import shuffle
+X_shuffle,y_shuffle = shuffle(X_train,y_train)
+X_train = X_shuffle[0:50000]
+y_train = y_shuffle[0:50000]
+
+from sklearn import tree
+from sklearn.model_selection import cross_val_predict
+
+#dt_clf = tree.DecisionTreeClassifier(max_depth=20, max_leaf_nodes=300)
+#dt_clf = tree.DecisionTreeClassifier(max_depth=4, max_leaf_nodes=20)
+dt_clf = tree.DecisionTreeClassifier(max_depth=8)
+
+#y_train_pred = cross_val_predict(dt_clf, X_train, y_train, cv=2)
+print(dt_clf.fit(X_train, y_train))
+
+print('Number of nodes in the decision tree {}.'.format(dt_clf.tree_.node_count))
+print('Number of threshold in the decision tree {}.'.format(len(dt_clf.tree_.threshold)))
+print('Number of leaves in the decision tree {}.'.format(dt_clf.tree_.n_leaves))
+
+from sklearn.metrics import accuracy_score
+print(accuracy_score(y_test, dt_clf.predict(X_test)), accuracy_score(y_train, dt_clf.predict(X_train)))
+
+
+threshold = dt_clf.tree_.threshold
+import pandas as pd
+df_train = pd.DataFrame(data = X_train, columns = range(X_train[0].shape[0]))
+df_test = pd.DataFrame(data = X_test, columns = range(X_test[0].shape[0]))
+df_train.shape, df_test.shape
+df = pd.concat([df_train, df_test])
+unique_vals = []
+for i in df.columns:
+    unique_vals.append(df[i].unique())
+flatten_list = np.concatenate(unique_vals).ravel()
+print('Max and Min values of thresholds in decision tree are', max([int(i) for i in list(set(threshold))]), min([int(i) for i in list(set(threshold))]))
+
+
+
+
+
+## NEW FSM Generator
+%%capture cap --no-stderr
+from sklearn.tree import _tree
+
+def tree_to_code(tree, feature_names):
+    tree_ = tree.tree_
+    feature_name = [
+        feature_names[i] if i != _tree.TREE_UNDEFINED else "undefined!"
+        for i in tree_.feature
+    ]
+    
+    def recurse(node, depth):
+        indent = "  " * depth
+        if tree_.feature[node] != _tree.TREE_UNDEFINED:
+            name = feature_name[node]
+            threshold = tree_.threshold[node]
+            print ("{}{}:if ({} <= {})".format(indent, node, name, int(round(threshold,3)))) 
+            recurse(tree_.children_left[node], depth + 1)
+            print ("{}{}:else ".format(indent, node, name, int(round(threshold,3))))
+            recurse(tree_.children_right[node], depth + 1)
+        else:
+            print ("{} Label<={};".format(indent, np.argmax(tree_.value[node][0],axis=0)))
+
+    recurse(0, 1)
+
+cols = range(784)
+features = ['pixels[{}]'.format(str(i)) for i in cols]
+class_names = [str(i) for i in dt_clf.classes_]
+tree_to_code(dt_clf, features)
+
+with open('verilog_newFSM.txt', 'w') as f:
+    f.write(cap.stdout)
+
+
+import pdb
+def write_file(data_towrite):
+    with open('verilog_file.v', 'a', encoding='utf-8') as file:
+        file.writelines(data_towrite)
+        file.close()
+        
+def write_line_file(data_towrite, line_num):
+    with open('verilog_file.v', 'r', encoding='utf-8') as file:
+        file_content = file.readlines()
+        file.close()
+    file_content[line_num] = file_content[line_num].replace('\n','') + ' ' + data_towrite + '\n'  
+    with open('verilog_file.v', 'w', encoding='utf-8') as file:
+        file.writelines(file_content)
+        file.close()
+        
+def search_content_file(word):
+    with open('verilog_file.v', 'r') as file:
+        file_content = file.readlines()
+        for line_num,line in enumerate(file_content):
+            if word in line:
+                return(line_num)
+        return("content doesn't exists.")
+    
+def update_stateformat_file():
+    with open('verilog_file.v', 'r', encoding='utf-8') as file:
+        file_content = file.readlines()
+        file.close()
+    for line_num,line in enumerate(file_content):
+        if 'if' in line:
+            file_content[line_num] = '16\'d' + file_content[line_num].strip() + ' \n'  
+    with open('verilog_file.v', 'w', encoding='utf-8') as file:
+        file.writelines(file_content)
+        file.close()
+        
+def clear_file():
+    with open('verilog_file.v', 'w', encoding='utf-8') as file:
+        pass
+        file.close()
+
+import itertools
+with open('verilog_newFSM.txt', 'r') as f:
+    tree_verilog = f.read()
+    f.close()
+
+clear_file()
+line_num = 0
+else_state = 0
+else_nextif_state = 0
+curr_line,next_line = itertools.tee(tree_verilog.split('\n'))
+next(next_line, None)
+for i,j in list(zip(curr_line,next_line)):
+    if 'Label' in i:
+        pass
+        #write_file(f'  begin {i.strip()} state<=0;ml_inference_completed<=1; end \n')
+    elif 'else' in i and 'Label' in j:
+        else_state = i.strip().split(':')[0]
+        line_num = search_content_file(' '+str(else_state)+':if' )
+        write_line_file(f'\n       else begin {j.strip()} state<=0;ml_inference_completed<=1; end ', line_num)
+        #write_file(f'   {i.strip().split(":")[-1]} ')
+    elif 'else' in i and 'if' in j:
+        else_state = i.strip().split(':')[0]
+        else_nextif_state = j.strip().split(':')[0]
+        line_num = search_content_file(' '+str(else_state)+':if' )
+        write_line_file(f'else begin state<={else_nextif_state}; end ', line_num)
+    elif 'if' in i and 'Label' in j:
+        write_file(f'\n {i.strip()} begin {j.strip()} state<=0;ml_inference_completed<=1; end ')
+    elif 'if' in i and 'if' in j:
+        write_file(f'\n {i.strip()} begin state<={j.strip().split(":")[0]}; end \n ')  
+update_stateformat_file()
+

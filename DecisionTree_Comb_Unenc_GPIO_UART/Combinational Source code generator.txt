@@ -1,0 +1,77 @@
+import idx2numpy
+import seaborn as sns
+
+X_train_3D = idx2numpy.convert_from_file('train-images.idx3-ubyte')
+X_train = X_train_3D.flatten().reshape(60000,784)
+
+y_train = idx2numpy.convert_from_file('train-labels.idx1-ubyte')
+X_train.shape, y_train.shape
+
+
+X_test_3D = idx2numpy.convert_from_file('t10k-images.idx3-ubyte')
+X_test =  X_test_3D.flatten().reshape(10000,784)
+
+y_test = idx2numpy.convert_from_file('t10k-labels.idx1-ubyte')
+X_test.shape, y_test.shape
+
+
+import numpy as np
+from sklearn.utils import shuffle
+X_shuffle,y_shuffle = shuffle(X_train,y_train)
+X_train = X_shuffle[0:50000]
+y_train = y_shuffle[0:50000]
+
+from sklearn import tree
+from sklearn.model_selection import cross_val_predict
+
+#dt_clf = tree.DecisionTreeClassifier(max_depth=20, max_leaf_nodes=300)
+dt_clf = tree.DecisionTreeClassifier(max_depth=8)
+
+y_train_pred = cross_val_predict(dt_clf, X_train, y_train, cv=2)
+print(dt_clf.fit(X_train, y_train))
+
+print('Number of nodes in the decision tree {}.'.format(dt_clf.tree_.node_count))
+print('Number of threshold in the decision tree {}.'.format(len(dt_clf.tree_.threshold)))
+print('Number of leaves in the decision tree {}. It will be number of states in sequential FSM.'.format(dt_clf.tree_.n_leaves))
+
+from sklearn.model_selection import cross_val_score
+print( f"Cross validation for training set {np.mean(cross_val_score(dt_clf, X_train, y_train, cv=2, scoring='accuracy'))}")
+print( f"Cross validation for testing set {np.mean(cross_val_score(dt_clf, X_test, y_test, cv=2, scoring='accuracy'))}")
+
+
+### COMBINATIONAL: Convert into verilog combinational format and save in a text file.
+
+%%capture cap --no-stderr
+#https://towardsdatascience.com/scikit-learn-decision-trees-explained-803f3812290d
+from sklearn.tree import _tree
+
+def tree_to_code(tree, feature_names):
+    tree_ = tree.tree_
+    feature_name = [
+        feature_names[i] if i != _tree.TREE_UNDEFINED else "undefined!"
+        for i in tree_.feature
+    ]
+    print ("def decision_tree_inference({}):".format('feature_set'))
+    #for i,pixel in enumerate(feature_names):
+    #        print ("{}{}".format("  ", pixel+'='+'feature_set['+str(i)+']'))
+    def recurse(node, depth):
+        indent = "  " * depth
+        if tree_.feature[node] != _tree.TREE_UNDEFINED:
+            name = feature_name[node]
+            threshold = tree_.threshold[node]
+            print ("{}if ({} <= {})".format(indent, name, int(round(threshold,3))))  #convert the threshold to integer
+            recurse(tree_.children_left[node], depth + 1)
+            print ("{}else // if {} > {}".format(indent, name, int(round(threshold,3))))
+            recurse(tree_.children_right[node], depth + 1)
+        else:
+            print ("{} Label<= {};".format(indent, np.argmax(tree_.value[node][0],axis=0)))
+
+    recurse(0, 1)
+
+cols = range(784)
+features = ['pixels[{}]'.format(str(i)) for i in cols]
+class_names = [str(i) for i in dt_clf.classes_]
+tree_to_code(dt_clf, features)
+
+with open('verilog_mnist_decision_tree_inference.py', 'w') as f:
+    f.write(cap.stdout)
