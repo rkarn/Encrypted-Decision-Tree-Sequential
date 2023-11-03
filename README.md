@@ -15,12 +15,13 @@ Dependency:
 - Sklearn
 - Quartus Design suite
 - DE-10 Standard FPGA
+- USB to serial converter
 - Anaconda
 
 
 The process is as follows:
 1. Start from the Jupyter Notebook to train the decision tree model with Sklearn.
-2. Extract the combination circuit HDL (Verilog) source code.
+2. Extract the `combination/sequential` circuit's HDL (Verilog) source code.
 3. Transport the HDL to Quartus and do synthesis.
 4. Upload the sof file in FPGA.
 5. Test the inference using the jupyter notebook (serial library). 
